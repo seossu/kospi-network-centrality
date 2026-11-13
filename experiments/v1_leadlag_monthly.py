@@ -11,6 +11,12 @@ import matplotlib.pyplot as plt
 import matplotlib
 import statsmodels.api as sm
 import warnings, time
+from pathlib import Path
+ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = ROOT / "data"          # 원본 CSV 위치 (data/README.md 참고)
+RESULTS_DIR = ROOT / "results"    # 결과물 저장 위치
+DOCS_DIR = ROOT / "docs"          # 대시보드 (GitHub Pages)
+RESULTS_DIR.mkdir(exist_ok=True)
 warnings.filterwarnings('ignore')
 matplotlib.rcParams['font.family'] = 'AppleGothic'
 matplotlib.rcParams['axes.unicode_minus'] = False
@@ -24,9 +30,9 @@ t0 = time.time()
 # ═══════════════════════════════════════
 # 1. 데이터 로드
 # ═══════════════════════════════════════
-scores = pd.read_csv("daily_scores.csv", parse_dates=['date'])
-pairs = pd.read_csv("lead_lag_pairs.csv")
-total_adj_raw = pd.read_csv("total adj close.csv", index_col='Date', parse_dates=True, low_memory=False)
+scores = pd.read_csv(DATA_DIR / "daily_scores.csv", parse_dates=['date'])
+pairs = pd.read_csv(DATA_DIR / "lead_lag_pairs.csv")
+total_adj_raw = pd.read_csv(DATA_DIR / "total adj close.csv", index_col='Date', parse_dates=True, low_memory=False)
 total_adj = total_adj_raw.apply(pd.to_numeric, errors='coerce')
 total_adj_monthly = total_adj.resample('ME').last()
 returns_monthly = total_adj_monthly.pct_change(fill_method=None)
@@ -38,15 +44,15 @@ for col in returns_monthly_wins.columns:
         lo, hi = s.quantile(0.01), s.quantile(0.99)
         returns_monthly_wins[col] = returns_monthly_wins[col].clip(lo, hi)
 
-prices_raw = pd.read_csv("수정주가.csv", index_col='Date', parse_dates=True, low_memory=False)
+prices_raw = pd.read_csv(DATA_DIR / "수정주가.csv", index_col='Date', parse_dates=True, low_memory=False)
 prices = prices_raw.apply(pd.to_numeric, errors='coerce')
-tv_raw = pd.read_csv("trading value.csv", index_col=0, parse_dates=True, low_memory=False)
+tv_raw = pd.read_csv(DATA_DIR / "trading value.csv", index_col=0, parse_dates=True, low_memory=False)
 tv = tv_raw.apply(pd.to_numeric, errors='coerce')
 daily_ret_abs = prices.pct_change().abs()
 daily_illiq = daily_ret_abs / tv
 amihud_monthly = daily_illiq.resample('ME').mean()
 
-factors_raw = pd.read_csv("회귀분석_코스피.csv", index_col='코드명', parse_dates=True)
+factors_raw = pd.read_csv(DATA_DIR / "회귀분석_코스피.csv", index_col='코드명', parse_dates=True)
 for col in factors_raw.columns:
     factors_raw[col] = factors_raw[col].astype(str).str.replace(',', '').astype(float)
 kospi_factor_ret = factors_raw['코스피'].pct_change()
@@ -57,7 +63,7 @@ eco_annual = factors_raw['ECO'] / 100
 rf_monthly = (1 + eco_annual) ** (1/12) - 1
 mkt_factor = kospi_factor_ret - rf_monthly
 
-ks200_raw = pd.read_csv("KOSPI200.csv", index_col='Date', parse_dates=True)
+ks200_raw = pd.read_csv(DATA_DIR / "KOSPI200.csv", index_col='Date', parse_dates=True)
 ks200 = ks200_raw.apply(pd.to_numeric, errors='coerce')
 ks200_monthly = ks200.resample('ME').last().dropna()
 
@@ -362,7 +368,7 @@ fig.suptitle(
 )
 
 plt.tight_layout()
-plt.savefig('final_strategy.png', dpi=150, bbox_inches='tight')
+plt.savefig(RESULTS_DIR / 'final_strategy.png', dpi=150, bbox_inches='tight')
 plt.close()
 print("\nfinal_strategy.png 저장 완료!")
 
@@ -373,7 +379,7 @@ df_out = pd.DataFrame({
     'Log_NAV': np.log(nav_q5.values),
     'Monthly_Return': q5_rets.values,
 })
-df_out.to_excel("final_strategy_nav.xlsx", index=False)
+df_out.to_excel(RESULTS_DIR / "final_strategy_nav.xlsx", index=False)
 print("final_strategy_nav.xlsx 저장 완료!")
 
 print(f"\n총 소요: {time.time()-t0:.1f}초")

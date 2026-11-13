@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>네트워크 기반 퀀트 전략 대시보드</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>네트워크 기반 퀀트 전략</h1>
+        <p class="subtitle">Z-Score Composite + 월간 리밸런싱 대시보드</p>
+        <p class="gen-time" id="genTime"></p>
+    </header>
+
+    <main>
+        <!-- 전략 개요 -->
+        <section class="card strategy-overview">
+            <h2>전략 개요</h2>
+            <div class="process-steps">
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <div class="step-content">
+                        <h3>상관행렬 구축</h3>
+                        <p>60일 일별 수익률로 종목 간 상관행렬을 계산하고, Marchenko-Pastur 분포로 노이즈를 제거합니다.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <div class="step-content">
+                        <h3>네트워크 중심성 계산</h3>
+                        <p>정제된 상관행렬을 인접행렬로 변환하고, 시가총액으로 보정된 Cap-Scaled Eigenvector Centrality를 산출합니다.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <div class="step-content">
+                        <h3>Z-Score 복합점수</h3>
+                        <p>중심성 Z-Score에서 시장 모드 노출(λ₁ loading)을 차감하여 복합점수를 구성합니다.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">4</div>
+                    <div class="step-content">
+                        <h3>5분위 포트폴리오</h3>
+                        <p>복합점수 상위 20%(Q5)를 등가중으로 편입하고, 월 1회 리밸런싱합니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 필터링 과정 -->
+        <section class="card">
+            <h2>종목 필터링 과정</h2>
+            <div class="filter-flow">
+                <div class="filter-item">
+                    <span class="filter-icon">📊</span>
+                    <div>
+                        <strong>거래대금 필터</strong>
+                        <p>60일 평균 거래대금 하위 10% 제외</p>
+                    </div>
+                </div>
+                <div class="filter-arrow">&rarr;</div>
+                <div class="filter-item">
+                    <span class="filter-icon">🏢</span>
+                    <div>
+                        <strong>시총 상위 제외</strong>
+                        <p>동적 cutoff로 대형주 제외 (시장 집중도 기반)</p>
+                    </div>
+                </div>
+                <div class="filter-arrow">&rarr;</div>
+                <div class="filter-item">
+                    <span class="filter-icon">🚫</span>
+                    <div>
+                        <strong>스팩/동전주 제외</strong>
+                        <p>SPAC 및 1,000원 미만 종목 제외</p>
+                    </div>
+                </div>
+                <div class="filter-arrow">&rarr;</div>
+                <div class="filter-item active">
+                    <span class="filter-icon">✅</span>
+                    <div>
+                        <strong>최종 Q5 편입</strong>
+                        <p id="filterResult">복합점수 상위 20% 등가중 편입</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 파라미터 & 성과 -->
+        <section class="metrics-row">
+            <div class="card metric-card">
+                <h2>이번 달 파라미터</h2>
+                <div class="param-grid" id="paramGrid"></div>
+            </div>
+            <div class="card metric-card">
+                <h2>백테스트 성과 (2000~)</h2>
+                <div class="perf-grid" id="perfGrid"></div>
+            </div>
+        </section>
+
+        <!-- 매수 종목 리스트 -->
+        <section class="card">
+            <h2>이번 달 매수 종목 (Q5)</h2>
+            <p class="table-desc">API 연동 시 아래 종목을 등가중으로 매수합니다. 복합점수 내림차순 정렬.</p>
+            <div class="table-wrapper">
+                <table id="portfolioTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>종목코드</th>
+                            <th>종목명</th>
+                            <th>복합점수</th>
+                            <th>중심성</th>
+                            <th>λ₁ Loading</th>
+                            <th>현재가</th>
+                            <th>시총(억)</th>
+                            <th>비중</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- 차트 영역 -->
+        <section class="charts-row">
+            <div class="card chart-card">
+                <h2>퀀타일별 NAV (수수료 전)</h2>
+                <canvas id="quintileChart"></canvas>
+            </div>
+            <div class="card chart-card">
+                <h2>Q5 NAV (수수료 후)</h2>
+                <canvas id="q5Chart"></canvas>
+            </div>
+        </section>
+
+        <section class="card chart-card-full">
+            <h2>퀀타일별 CAGR</h2>
+            <canvas id="cagrChart"></canvas>
+        </section>
+
+        <!-- 전체 종목 점수 (상위) -->
+        <section class="card">
+            <h2>전체 종목 복합점수 (상위 200)</h2>
+            <div class="table-wrapper">
+                <table id="allScoresTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>종목코드</th>
+                            <th>종목명</th>
+                            <th>복합점수</th>
+                            <th>분위</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- API 연동 안내 -->
+        <section class="card api-guide">
+            <h2>API 연동 가이드</h2>
+            <div class="api-steps">
+                <div class="api-step">
+                    <h3>Step 1: 데이터 갱신</h3>
+                    <code>python generate_data.py</code>
+                    <p>매월 말 최신 CSV 데이터로 strategy_data.json을 갱신합니다.</p>
+                </div>
+                <div class="api-step">
+                    <h3>Step 2: 종목 리스트 확인</h3>
+                    <p>대시보드에서 Q5 매수 종목과 비중을 확인합니다.</p>
+                </div>
+                <div class="api-step">
+                    <h3>Step 3: 증권사 API 연동</h3>
+                    <p>한국투자증권/키움 등 API로 종목 리스트를 전달하여 자동 매수/매도 주문을 실행합니다.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>봄학기 1차 최종 | 네트워크 기반 퀀트 전략 대시보드</p>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
